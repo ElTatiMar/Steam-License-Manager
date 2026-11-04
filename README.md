@@ -27,7 +27,7 @@ A browser console script that injects an interactive management panel onto the S
 
 ## How to Use
 
-1. Open your browser and log in to [https://store.steampowered.com/](https://store.steampowered.com/) (or navigate directly to [https://store.steampowered.com/account/licenses/](https://store.steampowered.com/account/licenses/)).
+1. Open your browser and log in to [https://store.steampowered.com](https://store.steampowered.com) (or navigate directly to [https://store.steampowered.com/account/licenses](https://store.steampowered.com/account/licenses)).
 2. Open your browser's **Developer Tools**:
    - **Windows / Linux**: Press `F12` or `Ctrl + Shift + I`
    - **macOS**: Press `Cmd + Option + I`
