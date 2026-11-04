@@ -75,6 +75,3 @@ coverage/
 .idea/
 .DS_Store
 Thumbs.db
-
-# Project-specific ignored files
-steam-demo-cleaner.js
