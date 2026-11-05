@@ -17,6 +17,7 @@ A browser console script that injects an interactive management panel onto the S
   - **Demos & Trailers**: Filter items matching demo, trailer, teaser, PEGI, or ESRB keywords.
   - **Selected**: View only the licenses you have checked for bulk removal.
 - **Single & Bulk Removal**: Remove a single license with one click or select multiple licenses (with **Select All** support for the active filter) and remove them sequentially.
+- **Export to `.TXT` & `.CSV`**: Export your selected or currently filtered licenses to a plain-text (`.txt`) or spreadsheet-ready (`.csv`) file with one click.
 - **Built-in Rate-Limit & Session Handling**:
   - Verifies an active Steam login session (`g_sessionID`) before scanning or removing.
   - Spaces requests with a `1000ms` delay to be gentle on Steam's servers.
@@ -47,6 +48,7 @@ A browser console script that injects an interactive management panel onto the S
 | **Rescan Licenses** | Re-fetches your account's license pages from Steam. |
 | **Select All Checkbox** | Located in the table header; selects or deselects all licenses matching the current search/filter. |
 | **Remove (Row Button)** | Immediately removes that specific license from your account. |
+| **Export .TXT / Export .CSV** | Downloads a `.txt` or `.csv` file of checked licenses (if any are selected) or all currently filtered licenses. |
 | **Remove Selected (N)** | Removes all currently checked licenses sequentially. |
 | **Stop** | Safely aborts an active scan or bulk removal operation. |
 | **`_` / `✕` (Header)** | Minimize the panel to the bottom-right corner or close it completely. |
@@ -67,6 +69,10 @@ await SteamLicenseManager.populate();
 // Filter the UI and return matching license objects
 SteamLicenseManager.search("12345");
 SteamLicenseManager.search("demo");
+
+// Export licenses as .txt or .csv (scope: "auto" | "selected" | "filtered" | "all")
+SteamLicenseManager.exportTxt();
+SteamLicenseManager.exportCsv("all");
 
 // Remove specific Package / AppIds directly via console
 await SteamLicenseManager.removePackages(["12345", "67890"]);

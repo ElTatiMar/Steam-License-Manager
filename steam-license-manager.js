@@ -403,6 +403,98 @@
     }
 
     /**
+     * Resolve which licenses to export based on scope ("auto" | "selected" | "filtered" | "all")
+     */
+    function getLicensesToExport(scope = "auto") {
+        const activeLicenses = state.licenses.filter((item) => !item.removed);
+        if (scope === "all") {
+            return activeLicenses;
+        }
+        if (scope === "selected") {
+            return activeLicenses.filter((item) => state.selectedIds.has(item.id));
+        }
+        if (scope === "filtered") {
+            return getFilteredLicenses();
+        }
+        // "auto": export selected licenses if any are checked, otherwise export currently filtered list
+        if (state.selectedIds.size > 0) {
+            return activeLicenses.filter((item) => state.selectedIds.has(item.id));
+        }
+        return getFilteredLicenses();
+    }
+
+    /**
+     * Escape a value for CSV output (RFC 4180)
+     */
+    function escapeCsvField(value) {
+        const str = String(value ?? "");
+        if (/[",\r\n]/.test(str)) {
+            return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+    }
+
+    /**
+     * Export licenses as a downloadable .txt or .csv file
+     */
+    function exportLicenses(format = "txt", scope = "auto") {
+        const fmt = String(format).toLowerCase() === "csv" ? "csv" : "txt";
+        const items = getLicensesToExport(scope);
+
+        if (!items || items.length === 0) {
+            logMessage("No licenses available to export.", "warn");
+            return false;
+        }
+
+        let content = "";
+        let mimeType = "text/plain;charset=utf-8";
+
+        if (fmt === "csv") {
+            mimeType = "text/csv;charset=utf-8";
+            const header = ["AppId/PackageId", "Name", "Date", "Acquisition", "IsDemo"];
+            const rows = items.map((item) =>
+                [
+                    escapeCsvField(item.id),
+                    escapeCsvField(item.name),
+                    escapeCsvField(item.date || ""),
+                    escapeCsvField(item.acquisition || ""),
+                    escapeCsvField(item.isDemo ? "true" : "false"),
+                ].join(",")
+            );
+            // Prefix with UTF-8 BOM so spreadsheet software opens Unicode characters cleanly
+            content = "\uFEFF" + [header.join(","), ...rows].join("\r\n");
+        } else {
+            const lines = items.map((item) => {
+                const meta = [item.date, item.acquisition].filter(Boolean).join(" | ");
+                return meta ? `${item.id} - ${item.name} (${meta})` : `${item.id} - ${item.name}`;
+            });
+            content = lines.join("\r\n");
+        }
+
+        const dateStamp = new Date().toISOString().slice(0, 10);
+        const filename = `steam-licenses-${dateStamp}.${fmt}`;
+
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+        const scopeDesc =
+            scope === "auto"
+                ? state.selectedIds.size > 0
+                    ? "selected"
+                    : "filtered"
+                : scope;
+        logMessage(`Exported ${items.length} ${scopeDesc} license(s) to ${filename}.`, "success");
+        return true;
+    }
+
+    /**
      * Inject CSS styles for the Steam License Manager UI
      */
     function injectStyles() {
@@ -734,6 +826,8 @@
         const countBadge = document.getElementById("slm-count-badge");
         const selectAllCheckbox = document.getElementById("slm-select-all");
         const removeSelectedBtn = document.getElementById("slm-remove-selected-btn");
+        const exportTxtBtn = document.getElementById("slm-export-txt-btn");
+        const exportCsvBtn = document.getElementById("slm-export-csv-btn");
         const directBar = document.getElementById("slm-direct-remove-bar");
         const directIdLabel = document.getElementById("slm-direct-id-label");
 
@@ -741,6 +835,11 @@
 
         const activeLicenses = state.licenses.filter((l) => !l.removed);
         const filtered = getFilteredLicenses();
+        const exportableCount = state.selectedIds.size > 0 ? state.selectedIds.size : filtered.length;
+        const exportHint =
+            state.selectedIds.size > 0
+                ? `Export ${state.selectedIds.size} selected license(s)`
+                : `Export ${filtered.length} filtered license(s)`;
 
         if (countBadge) {
             countBadge.textContent = `${filtered.length} / ${activeLicenses.length} Licenses (${state.selectedIds.size} selected)`;
@@ -750,6 +849,16 @@
             removeSelectedBtn.textContent = `Remove Selected (${state.selectedIds.size})`;
             removeSelectedBtn.disabled =
                 state.selectedIds.size === 0 || state.isScanning || state.isRemoving;
+        }
+
+        if (exportTxtBtn) {
+            exportTxtBtn.disabled = exportableCount === 0 || state.isScanning;
+            exportTxtBtn.title = `${exportHint} as .txt`;
+        }
+
+        if (exportCsvBtn) {
+            exportCsvBtn.disabled = exportableCount === 0 || state.isScanning;
+            exportCsvBtn.title = `${exportHint} as .csv`;
         }
 
         // Show direct AppId removal helper if user typed one or more numeric IDs
@@ -829,8 +938,11 @@
         const stopBtn = document.getElementById("slm-stop-btn");
         const removeSelectedBtn = document.getElementById("slm-remove-selected-btn");
         const directRemoveBtn = document.getElementById("slm-direct-remove-btn");
+        const exportTxtBtn = document.getElementById("slm-export-txt-btn");
+        const exportCsvBtn = document.getElementById("slm-export-csv-btn");
 
         const busy = state.isScanning || state.isRemoving;
+        const exportableCount = getLicensesToExport("auto").length;
 
         if (scanBtn) {
             scanBtn.disabled = busy;
@@ -844,6 +956,12 @@
         }
         if (directRemoveBtn) {
             directRemoveBtn.disabled = busy;
+        }
+        if (exportTxtBtn) {
+            exportTxtBtn.disabled = state.isScanning || exportableCount === 0;
+        }
+        if (exportCsvBtn) {
+            exportCsvBtn.disabled = state.isScanning || exportableCount === 0;
         }
     }
 
@@ -932,6 +1050,12 @@
                 <div class="slm-footer">
                     <div id="slm-status-text" class="slm-status">Ready.</div>
                     <div class="slm-footer-actions">
+                        <button id="slm-export-txt-btn" class="slm-btn" disabled title="Export licenses as .txt">
+                            Export .TXT
+                        </button>
+                        <button id="slm-export-csv-btn" class="slm-btn" disabled title="Export licenses as .csv">
+                            Export .CSV
+                        </button>
                         <button id="slm-stop-btn" class="slm-btn" style="display: none;">Stop</button>
                         <button id="slm-remove-selected-btn" class="slm-btn slm-btn-danger" disabled>
                             Remove Selected (0)
@@ -955,6 +1079,8 @@
         const scanBtn = document.getElementById("slm-scan-btn");
         const stopBtn = document.getElementById("slm-stop-btn");
         const removeSelectedBtn = document.getElementById("slm-remove-selected-btn");
+        const exportTxtBtn = document.getElementById("slm-export-txt-btn");
+        const exportCsvBtn = document.getElementById("slm-export-csv-btn");
         const directRemoveBtn = document.getElementById("slm-direct-remove-btn");
         const selectAllCheckbox = document.getElementById("slm-select-all");
         const tbody = document.getElementById("slm-table-body");
@@ -990,6 +1116,14 @@
         stopBtn.addEventListener("click", () => {
             state.abortRequested = true;
             logMessage("Stopping current operation...", "warn");
+        });
+
+        exportTxtBtn.addEventListener("click", () => {
+            exportLicenses("txt", "auto");
+        });
+
+        exportCsvBtn.addEventListener("click", () => {
+            exportLicenses("csv", "auto");
         });
 
         selectAllCheckbox.addEventListener("change", (e) => {
@@ -1056,6 +1190,9 @@
         open: createUI,
         populate,
         removePackages,
+        exportLicenses,
+        exportTxt: (scope = "auto") => exportLicenses("txt", scope),
+        exportCsv: (scope = "auto") => exportLicenses("csv", scope),
         search(query) {
             state.searchQuery = String(query || "");
             const searchInput = document.getElementById("slm-search-input");
