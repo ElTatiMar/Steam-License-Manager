@@ -17,6 +17,7 @@ A browser console script that injects an interactive management panel onto the S
   - **Demos & Trailers**: Filter items matching demo, trailer, teaser, PEGI, or ESRB keywords.
   - **Selected**: View only the licenses you have checked for bulk removal.
 - **Single & Bulk Removal**: Remove a single license with one click or select multiple licenses (with **Select All** support for the active filter) and remove them sequentially.
+- **Activate Steam Key(s)**: Open a popup to enter one or more Steam keys (one per line), validate each line against `AAAAA-BBBBB-CCCCC`, uppercase each key, and open `https://store.steampowered.com/account/registerkey?key={KEY}` in a new tab per key.
 - **Export to `.TXT` & `.CSV`**: Export your selected or currently filtered licenses to a plain-text (`.txt`) or spreadsheet-ready (`.csv`) file with one click.
 - **Built-in Rate-Limit & Session Handling**:
   - Verifies an active Steam login session (`g_sessionID`) before scanning or removing.
@@ -45,6 +46,7 @@ A browser console script that injects an interactive management panel onto the S
 | **Search Input** | Filter scanned licenses by numeric ID (`12345`), multiple IDs (`12345, 67890`), or license title. |
 | **Remove ID(s) Directly** | Appears automatically when numeric IDs are typed in the search box; removes those IDs immediately. |
 | **All / Demos & Trailers / Selected** | Quick filter tabs to narrow down the displayed license list. |
+| **Activate Key(s)** | Opens a popup to input one Steam key per line (`AAAAA-BBBBB-CCCCC`), validates each line, and opens a registration tab per key. |
 | **Rescan Licenses** | Re-fetches your account's license pages from Steam. |
 | **Select All Checkbox** | Located in the table header; selects or deselects all licenses matching the current search/filter. |
 | **Remove (Row Button)** | Immediately removes that specific license from your account. |
@@ -73,6 +75,10 @@ SteamLicenseManager.search("demo");
 // Export licenses as .txt or .csv (scope: "auto" | "selected" | "filtered" | "all")
 SteamLicenseManager.exportTxt();
 SteamLicenseManager.exportCsv("all");
+
+// Open the Activate Key(s) popup or activate keys directly via console
+SteamLicenseManager.openActivateKeysPopup();
+SteamLicenseManager.activateKeys("AAAAA-BBBBB-CCCCC\n12345-ABCDE-67890");
 
 // Remove specific Package / AppIds directly via console
 await SteamLicenseManager.removePackages(["12345", "67890"]);

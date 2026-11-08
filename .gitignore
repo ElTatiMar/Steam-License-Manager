@@ -75,6 +75,3 @@ coverage/
 .idea/
 .DS_Store
 Thumbs.db
-
-# Project specific files
-steam-activate-key.js

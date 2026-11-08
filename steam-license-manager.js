@@ -13,6 +13,8 @@
     const MODAL_ID = "steam-license-manager-overlay";
     const STYLE_ID = "steam-license-manager-styles";
     const DEMO_REGEX = /\b(?:trailer|teaser|demo|pegi|esrb)\b/i;
+    const REGISTER_KEY_BASE_URL = "https://store.steampowered.com/account/registerkey?key=";
+    const STEAM_KEY_REGEX = /^[a-zA-Z0-9]{5}-[a-zA-Z0-9]{5}-[a-zA-Z0-9]{5}$/;
 
     // State
     const state = {
@@ -238,7 +240,7 @@
         let retryCount = 0;
         let removedCount = 0;
 
-        for (let i = 0; i < appIds.length; ) {
+        for (let i = 0; i < appIds.length;) {
             if (state.abortRequested) {
                 logMessage(`Removal stopped by user (${removedCount}/${appIds.length} removed).`, "warn");
                 state.isRemoving = false;
@@ -495,6 +497,105 @@
     }
 
     /**
+     * Validate Steam keys line-by-line (format: AAAAA-BBBBB-CCCCC, letters or numbers)
+     * Converts each line to string and uppercases it.
+     */
+    function validateSteamKeys(rawInput) {
+        const lines = Array.isArray(rawInput)
+            ? rawInput
+            : String(rawInput ?? "").split(/\r?\n/);
+
+        const validKeys = [];
+        const invalidLines = [];
+
+        lines.forEach((rawLine, idx) => {
+            const cleaned = rawLine !== undefined && rawLine !== null ? rawLine.toString().trim().toUpperCase() : "";
+            if (!cleaned) return; // Skip empty lines
+
+            if (STEAM_KEY_REGEX.test(cleaned)) {
+                validKeys.push(cleaned);
+            } else {
+                invalidLines.push({
+                    lineNumber: idx + 1,
+                    value: cleaned,
+                });
+            }
+        });
+
+        return {
+            valid: validKeys.length > 0 && invalidLines.length === 0,
+            validKeys,
+            invalidLines,
+        };
+    }
+
+    /**
+     * Validate and open a new Steam key registration tab for each valid key line
+     */
+    function activateKeys(rawInput) {
+        const { valid, validKeys, invalidLines } = validateSteamKeys(rawInput);
+
+        if (invalidLines.length > 0) {
+            const details = invalidLines
+                .map((item) => `Line ${item.lineNumber}: "${item.value}"`)
+                .join("; ");
+            logMessage(
+                `Invalid Steam key format (expected AAAAA-BBBBB-CCCCC) on ${details}`,
+                "error"
+            );
+            return { valid: false, validKeys, invalidLines };
+        }
+
+        if (validKeys.length === 0) {
+            logMessage("Please enter at least one valid Steam key (AAAAA-BBBBB-CCCCC).", "warn");
+            return { valid: false, validKeys, invalidLines };
+        }
+
+        validKeys.forEach((key) => {
+            const formattedKey = key.toString().toUpperCase();
+            const url = `${REGISTER_KEY_BASE_URL}${formattedKey}`;
+            window.open(url, "_blank");
+            logMessage(`Opened activation tab for key: ${formattedKey}`, "success");
+        });
+
+        return { valid: true, validKeys, invalidLines: [] };
+    }
+
+    /**
+     * Open the Activate Key(s) popup inside the manager UI
+     */
+    function openActivateKeysPopup() {
+        const popup = document.getElementById("slm-key-popup-backdrop");
+        const textarea = document.getElementById("slm-key-textarea");
+        const errorBox = document.getElementById("slm-key-error");
+        if (!popup) return;
+
+        if (errorBox) {
+            errorBox.style.display = "none";
+            errorBox.textContent = "";
+        }
+        popup.style.display = "flex";
+        if (textarea) {
+            textarea.focus();
+        }
+    }
+
+    /**
+     * Close the Activate Key(s) popup
+     */
+    function closeActivateKeysPopup() {
+        const popup = document.getElementById("slm-key-popup-backdrop");
+        const errorBox = document.getElementById("slm-key-error");
+        if (popup) {
+            popup.style.display = "none";
+        }
+        if (errorBox) {
+            errorBox.style.display = "none";
+            errorBox.textContent = "";
+        }
+    }
+
+    /**
      * Inject CSS styles for the Steam License Manager UI
      */
     function injectStyles() {
@@ -521,6 +622,7 @@
                 backdrop-filter: none;
             }
             .slm-panel {
+                position: relative;
                 width: min(920px, 95vw);
                 max-height: 88vh;
                 background: linear-gradient(180deg, #1b2838 0%, #171a21 100%);
@@ -803,6 +905,83 @@
                 gap: 8px;
                 align-items: center;
             }
+            .slm-btn-success {
+                background: linear-gradient(90deg, #6fa720 0%, #588a1b 100%);
+                border-color: #8ed629;
+            }
+            .slm-btn-success:hover:not(:disabled) {
+                background: linear-gradient(90deg, #7ec025 0%, #659e20 100%);
+            }
+            .slm-popup-backdrop {
+                position: absolute;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.78);
+                display: none;
+                align-items: center;
+                justify-content: center;
+                z-index: 10;
+                padding: 16px;
+            }
+            .slm-popup {
+                width: min(480px, 92vw);
+                background: linear-gradient(180deg, #1b2838 0%, #171a21 100%);
+                border: 1px solid #47bfff;
+                border-radius: 6px;
+                box-shadow: 0 12px 36px rgba(0, 0, 0, 0.9);
+                padding: 16px 18px;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+            .slm-popup-title {
+                margin: 0;
+                font-size: 15px;
+                font-weight: 600;
+                color: #ffffff;
+            }
+            .slm-popup-desc {
+                margin: 0;
+                font-size: 12px;
+                color: #9fb2c4;
+                line-height: 1.45;
+            }
+            .slm-textarea {
+                width: 100%;
+                box-sizing: border-box;
+                background: #101822;
+                border: 1px solid #2a475e;
+                border-radius: 3px;
+                padding: 9px 11px;
+                color: #ffffff;
+                font-family: Consolas, monospace;
+                font-size: 13px;
+                line-height: 1.5;
+                resize: vertical;
+                min-height: 120px;
+                outline: none;
+                text-transform: uppercase;
+            }
+            .slm-textarea:focus {
+                border-color: #66c0f4;
+                box-shadow: 0 0 0 1px rgba(102, 192, 244, 0.3);
+            }
+            .slm-popup-error {
+                display: none;
+                background: rgba(139, 38, 38, 0.35);
+                border: 1px solid #b83b3b;
+                border-radius: 3px;
+                padding: 8px 10px;
+                color: #ff8585;
+                font-size: 12px;
+                line-height: 1.4;
+                max-height: 90px;
+                overflow-y: auto;
+            }
+            .slm-popup-actions {
+                display: flex;
+                justify-content: flex-end;
+                gap: 8px;
+            }
         `;
         document.head.appendChild(style);
     }
@@ -888,8 +1067,8 @@
             const emptyMsg = state.isScanning
                 ? "Scanning your Steam account licenses..."
                 : activeLicenses.length === 0
-                ? 'No removable licenses loaded yet. Click "Scan Licenses" or enter an AppId / Package ID above.'
-                : "No licenses match your current search filter.";
+                    ? 'No removable licenses loaded yet. Click "Scan Licenses" or enter an AppId / Package ID above.'
+                    : "No licenses match your current search filter.";
             tbody.innerHTML = `<tr><td colspan="5" class="slm-empty">${escapeHtml(emptyMsg)}</td></tr>`;
             return;
         }
@@ -902,9 +1081,8 @@
                 return `
                     <tr class="${isSelected ? "slm-row-selected" : ""}" data-id="${escapeHtml(item.id)}">
                         <td style="width: 32px; text-align: center;">
-                            <input type="checkbox" class="slm-row-checkbox" data-id="${escapeHtml(item.id)}" ${
-                    isSelected ? "checked" : ""
-                } ${disabledAttr} />
+                            <input type="checkbox" class="slm-row-checkbox" data-id="${escapeHtml(item.id)}" ${isSelected ? "checked" : ""
+                    } ${disabledAttr} />
                         </td>
                         <td style="width: 110px;">
                             <span class="slm-id-pill">${escapeHtml(item.id)}</span>
@@ -917,8 +1095,8 @@
                         </td>
                         <td style="width: 85px; text-align: right;">
                             <button class="slm-btn slm-btn-danger slm-btn-sm slm-single-remove-btn" data-id="${escapeHtml(
-                                item.id
-                            )}" ${disabledAttr}>
+                        item.id
+                    )}" ${disabledAttr}>
                                 Remove
                             </button>
                         </td>
@@ -1011,6 +1189,9 @@
                             <button class="slm-filter-btn" data-filter="selected">Selected</button>
                         </div>
 
+                        <button id="slm-activate-keys-btn" class="slm-btn slm-btn-success" title="Activate one or more Steam keys">
+                            Activate Key(s)
+                        </button>
                         <button id="slm-scan-btn" class="slm-btn slm-btn-primary">Rescan Licenses</button>
                     </div>
 
@@ -1062,6 +1243,27 @@
                         </button>
                     </div>
                 </div>
+
+                <div id="slm-key-popup-backdrop" class="slm-popup-backdrop" role="dialog" aria-label="Activate Steam Keys">
+                    <div class="slm-popup">
+                        <h3 class="slm-popup-title">Activate Steam Key(s)</h3>
+                        <p class="slm-popup-desc">
+                            Enter one Steam key per line. Each line must follow the format
+                            <strong style="color: #66c0f4;">AAAAA-BBBBB-CCCCC</strong> (letters or numbers) and will open in a new tab.
+                        </p>
+                        <textarea
+                            id="slm-key-textarea"
+                            class="slm-textarea"
+                            placeholder="AAAAA-BBBBB-CCCCC&#10;12345-ABCDE-67890"
+                            spellcheck="false"
+                        ></textarea>
+                        <div id="slm-key-error" class="slm-popup-error"></div>
+                        <div class="slm-popup-actions">
+                            <button id="slm-key-cancel-btn" class="slm-btn">Cancel</button>
+                            <button id="slm-key-submit-btn" class="slm-btn slm-btn-success">Activate</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
 
@@ -1076,6 +1278,12 @@
     function bindEvents(overlay) {
         const searchInput = document.getElementById("slm-search-input");
         const clearSearchBtn = document.getElementById("slm-clear-search-btn");
+        const activateKeysBtn = document.getElementById("slm-activate-keys-btn");
+        const keyPopupBackdrop = document.getElementById("slm-key-popup-backdrop");
+        const keyTextarea = document.getElementById("slm-key-textarea");
+        const keyErrorBox = document.getElementById("slm-key-error");
+        const keyCancelBtn = document.getElementById("slm-key-cancel-btn");
+        const keySubmitBtn = document.getElementById("slm-key-submit-btn");
         const scanBtn = document.getElementById("slm-scan-btn");
         const stopBtn = document.getElementById("slm-stop-btn");
         const removeSelectedBtn = document.getElementById("slm-remove-selected-btn");
@@ -1098,6 +1306,58 @@
             searchInput.value = "";
             renderLicenseList();
             searchInput.focus();
+        });
+
+        activateKeysBtn.addEventListener("click", () => {
+            openActivateKeysPopup();
+        });
+
+        keyCancelBtn.addEventListener("click", () => {
+            closeActivateKeysPopup();
+        });
+
+        keyPopupBackdrop.addEventListener("click", (e) => {
+            if (e.target === keyPopupBackdrop) {
+                closeActivateKeysPopup();
+            }
+        });
+
+        keyTextarea.addEventListener("input", () => {
+            if (keyErrorBox && keyErrorBox.style.display !== "none") {
+                keyErrorBox.style.display = "none";
+                keyErrorBox.textContent = "";
+            }
+        });
+
+        keySubmitBtn.addEventListener("click", () => {
+            const rawText = keyTextarea ? keyTextarea.value : "";
+            const { valid, validKeys, invalidLines } = validateSteamKeys(rawText);
+
+            if (invalidLines.length > 0) {
+                const invalidMsg = invalidLines
+                    .map((item) => `Line ${item.lineNumber}: "${item.value}"`)
+                    .join(" | ");
+                if (keyErrorBox) {
+                    keyErrorBox.textContent = `Invalid Steam key(s) — must match AAAAA-BBBBB-CCCCC: ${invalidMsg}`;
+                    keyErrorBox.style.display = "block";
+                }
+                logMessage(`Invalid Steam key input (${invalidMsg})`, "error");
+                return;
+            }
+
+            if (!valid || validKeys.length === 0) {
+                if (keyErrorBox) {
+                    keyErrorBox.textContent = "Please enter at least one Steam key (AAAAA-BBBBB-CCCCC).";
+                    keyErrorBox.style.display = "block";
+                }
+                return;
+            }
+
+            activateKeys(validKeys);
+            if (keyTextarea) {
+                keyTextarea.value = "";
+            }
+            closeActivateKeysPopup();
         });
 
         filterBtns.forEach((btn) => {
@@ -1190,6 +1450,8 @@
         open: createUI,
         populate,
         removePackages,
+        activateKeys,
+        openActivateKeysPopup,
         exportLicenses,
         exportTxt: (scope = "auto") => exportLicenses("txt", scope),
         exportCsv: (scope = "auto") => exportLicenses("csv", scope),
@@ -1211,4 +1473,3 @@
         await populate(() => renderLicenseList());
     })();
 })();
-
