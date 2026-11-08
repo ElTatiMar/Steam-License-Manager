@@ -35,7 +35,7 @@ A browser console script that injects an interactive management panel onto the S
    - **macOS**: Press `Cmd + Option + I`
 3. Switch to the **Console** tab.
 4. Copy the entire contents of [`steam-license-manager.js`](./steam-license-manager.js), paste it into the console, and press **Enter**.
-5. The **Steam License Manager** modal will appear and automatically begin scanning your account licenses.
+5. The **Steam License Manager** modal will appear. Click **Scan Licenses** to scan your account licenses (or immediately use **Activate Key(s)** or direct ID removal).
 
 ---
 
@@ -47,7 +47,7 @@ A browser console script that injects an interactive management panel onto the S
 | **Remove ID(s) Directly** | Appears automatically when numeric IDs are typed in the search box; removes those IDs immediately. |
 | **All / Demos & Trailers / Selected** | Quick filter tabs to narrow down the displayed license list. |
 | **Activate Key(s)** | Opens a popup to input one Steam key per line (`AAAAA-BBBBB-CCCCC`), validates each line, and opens a registration tab per key. |
-| **Rescan Licenses** | Re-fetches your account's license pages from Steam. |
+| **Scan Licenses / Rescan Licenses** | Fetches (or re-fetches) your account's license pages from Steam when clicked. |
 | **Select All Checkbox** | Located in the table header; selects or deselects all licenses matching the current search/filter. |
 | **Remove (Row Button)** | Immediately removes that specific license from your account. |
 | **Export .TXT / Export .CSV** | Downloads a `.txt` or `.csv` file of checked licenses (if any are selected) or all currently filtered licenses. |
@@ -92,6 +92,7 @@ SteamLicenseManager.getState();
 ## Notes & Limitations
 
 - **Removable Licenses Only**: Steam's `/account/removelicense` endpoint only supports removing complimentary/free licenses (those that have a `Remove` link on your Steam licenses page). Purchased retail/store games cannot be removed via this endpoint.
+- **Multi-Key Tab Opening & Pop-up Blockers**: Modern browsers allow a single click to open only 1 new tab by default unless pop-ups are allowed for the site. When activating multiple keys at once, if the browser blocks the 2nd+ tabs, the popup stays open with the remaining keys and one-click links—or you can allow pop-ups for `https://store.steampowered.com` in your browser's address bar to open all tabs simultaneously in a single click.
 - **Rate Limits**: Steam restricts how many licenses can be removed in a short window. If Steam responds with status code `84` (rate limit exceeded), the script will log a warning and wait 10 minutes before retrying, or you can click **Stop** to cancel.
 
 ---

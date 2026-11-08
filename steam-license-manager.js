@@ -543,22 +543,84 @@
                 `Invalid Steam key format (expected AAAAA-BBBBB-CCCCC) on ${details}`,
                 "error"
             );
-            return { valid: false, validKeys, invalidLines };
+            return { valid: false, validKeys, invalidLines, openedKeys: [], blockedKeys: [] };
         }
 
         if (validKeys.length === 0) {
             logMessage("Please enter at least one valid Steam key (AAAAA-BBBBB-CCCCC).", "warn");
-            return { valid: false, validKeys, invalidLines };
+            return { valid: false, validKeys, invalidLines, openedKeys: [], blockedKeys: [] };
         }
+
+        const openedKeys = [];
+        const blockedKeys = [];
 
         validKeys.forEach((key) => {
             const formattedKey = key.toString().toUpperCase();
             const url = `${REGISTER_KEY_BASE_URL}${formattedKey}`;
-            window.open(url, "_blank");
-            logMessage(`Opened activation tab for key: ${formattedKey}`, "success");
+            const win = window.open(url, "_blank");
+
+            if (win) {
+                openedKeys.push(formattedKey);
+                logMessage(`Opened activation tab for key: ${formattedKey}`, "success");
+            } else {
+                blockedKeys.push(formattedKey);
+            }
         });
 
-        return { valid: true, validKeys, invalidLines: [] };
+        if (blockedKeys.length > 0) {
+            logMessage(
+                `Opened ${openedKeys.length}/${validKeys.length} tab(s). Browser pop-up blocker prevented opening the remaining ${blockedKeys.length} tab(s). Allow pop-ups for store.steampowered.com in your address bar to open all tabs at once.`,
+                "warn"
+            );
+        }
+
+        return { valid: true, validKeys, invalidLines: [], openedKeys, blockedKeys };
+    }
+
+    /**
+     * Render clickable fallback links when the browser popup blocker blocks multi-tab opening
+     */
+    function renderBlockedKeyLinks(blockedKeys) {
+        const errorBox = document.getElementById("slm-key-error");
+        const textarea = document.getElementById("slm-key-textarea");
+        const submitBtn = document.getElementById("slm-key-submit-btn");
+        if (!errorBox) return;
+
+        if (!blockedKeys || blockedKeys.length === 0) {
+            errorBox.style.display = "none";
+            errorBox.innerHTML = "";
+            if (submitBtn) {
+                submitBtn.textContent = "Activate";
+            }
+            return;
+        }
+
+        if (textarea) {
+            textarea.value = blockedKeys.join("\n");
+        }
+        if (submitBtn) {
+            submitBtn.textContent = `Activate Remaining (${blockedKeys.length})`;
+        }
+
+        const linksHtml = blockedKeys
+            .map((key) => {
+                const url = `${REGISTER_KEY_BASE_URL}${encodeURIComponent(key)}`;
+                return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="slm-blocked-key-link" data-key="${escapeHtml(
+                    key
+                )}">Open ${escapeHtml(key)} ↗</a>`;
+            })
+            .join(" ");
+
+        errorBox.innerHTML = `
+            <div style="margin-bottom: 6px;">
+                <strong>Browser pop-up blocker blocked ${blockedKeys.length} tab(s).</strong><br/>
+                To open all keys in one click, click the <em>Pop-up blocked</em> icon in your browser's address bar and select
+                <strong>"Always allow pop-ups and redirects from https://store.steampowered.com"</strong>, then click
+                <strong>Activate Remaining</strong> — or click each key below:
+            </div>
+            <div class="slm-blocked-links-wrap">${linksHtml}</div>
+        `;
+        errorBox.style.display = "block";
     }
 
     /**
@@ -568,11 +630,15 @@
         const popup = document.getElementById("slm-key-popup-backdrop");
         const textarea = document.getElementById("slm-key-textarea");
         const errorBox = document.getElementById("slm-key-error");
+        const submitBtn = document.getElementById("slm-key-submit-btn");
         if (!popup) return;
 
         if (errorBox) {
             errorBox.style.display = "none";
-            errorBox.textContent = "";
+            errorBox.innerHTML = "";
+        }
+        if (submitBtn) {
+            submitBtn.textContent = "Activate";
         }
         popup.style.display = "flex";
         if (textarea) {
@@ -586,12 +652,16 @@
     function closeActivateKeysPopup() {
         const popup = document.getElementById("slm-key-popup-backdrop");
         const errorBox = document.getElementById("slm-key-error");
+        const submitBtn = document.getElementById("slm-key-submit-btn");
         if (popup) {
             popup.style.display = "none";
         }
         if (errorBox) {
             errorBox.style.display = "none";
-            errorBox.textContent = "";
+            errorBox.innerHTML = "";
+        }
+        if (submitBtn) {
+            submitBtn.textContent = "Activate";
         }
     }
 
@@ -945,6 +1015,15 @@
                 color: #9fb2c4;
                 line-height: 1.45;
             }
+            .slm-popup-warn {
+                background: rgba(229, 181, 79, 0.14);
+                border: 1px solid #e5b54f;
+                border-radius: 3px;
+                padding: 8px 10px;
+                color: #f3d078;
+                font-size: 12px;
+                line-height: 1.45;
+            }
             .slm-textarea {
                 width: 100%;
                 box-sizing: border-box;
@@ -974,8 +1053,29 @@
                 color: #ff8585;
                 font-size: 12px;
                 line-height: 1.4;
-                max-height: 90px;
+                max-height: 140px;
                 overflow-y: auto;
+            }
+            .slm-blocked-links-wrap {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                margin-top: 6px;
+            }
+            .slm-blocked-key-link {
+                display: inline-block;
+                background: #2a475e;
+                border: 1px solid #47bfff;
+                color: #ffffff !important;
+                text-decoration: none !important;
+                padding: 4px 8px;
+                border-radius: 3px;
+                font-family: Consolas, monospace;
+                font-size: 11px;
+                transition: background 0.15s;
+            }
+            .slm-blocked-key-link:hover {
+                background: #3d6c91;
             }
             .slm-popup-actions {
                 display: flex;
@@ -1124,7 +1224,11 @@
 
         if (scanBtn) {
             scanBtn.disabled = busy;
-            scanBtn.textContent = state.isScanning ? "Scanning..." : "Rescan Licenses";
+            scanBtn.textContent = state.isScanning
+                ? "Scanning..."
+                : state.licenses.length > 0
+                ? "Rescan Licenses"
+                : "Scan Licenses";
         }
         if (stopBtn) {
             stopBtn.style.display = busy ? "inline-block" : "none";
@@ -1192,7 +1296,7 @@
                         <button id="slm-activate-keys-btn" class="slm-btn slm-btn-success" title="Activate one or more Steam keys">
                             Activate Key(s)
                         </button>
-                        <button id="slm-scan-btn" class="slm-btn slm-btn-primary">Rescan Licenses</button>
+                        <button id="slm-scan-btn" class="slm-btn slm-btn-primary">Scan Licenses</button>
                     </div>
 
                     <div id="slm-direct-remove-bar" class="slm-direct-bar" style="display: none;">
@@ -1251,6 +1355,11 @@
                             Enter one Steam key per line. Each line must follow the format
                             <strong style="color: #66c0f4;">AAAAA-BBBBB-CCCCC</strong> (letters or numbers) and will open in a new tab.
                         </p>
+                        <div class="slm-popup-warn">
+                            <strong>⚠ Browser Pop-up Permission Required for Multiple Keys:</strong>
+                            To open multiple tabs at once, make sure pop-ups are allowed for
+                            <strong>store.steampowered.com</strong> in your browser's address bar.
+                        </div>
                         <textarea
                             id="slm-key-textarea"
                             class="slm-textarea"
@@ -1325,7 +1434,32 @@
         keyTextarea.addEventListener("input", () => {
             if (keyErrorBox && keyErrorBox.style.display !== "none") {
                 keyErrorBox.style.display = "none";
-                keyErrorBox.textContent = "";
+                keyErrorBox.innerHTML = "";
+            }
+            if (keySubmitBtn) {
+                keySubmitBtn.textContent = "Activate";
+            }
+        });
+
+        keyErrorBox.addEventListener("click", (e) => {
+            const link = e.target.closest(".slm-blocked-key-link");
+            if (!link) return;
+            const clickedKey = link.getAttribute("data-key");
+            if (!clickedKey) return;
+
+            logMessage(`Opened activation tab for key: ${clickedKey}`, "success");
+            const currentLines = (keyTextarea ? keyTextarea.value : "")
+                .split(/\r?\n/)
+                .map((l) => l.trim().toUpperCase())
+                .filter((l) => l && l !== clickedKey);
+
+            if (currentLines.length === 0) {
+                if (keyTextarea) {
+                    keyTextarea.value = "";
+                }
+                closeActivateKeysPopup();
+            } else {
+                renderBlockedKeyLinks(currentLines);
             }
         });
 
@@ -1353,7 +1487,13 @@
                 return;
             }
 
-            activateKeys(validKeys);
+            const { blockedKeys } = activateKeys(validKeys);
+
+            if (blockedKeys && blockedKeys.length > 0) {
+                renderBlockedKeyLinks(blockedKeys);
+                return;
+            }
+
             if (keyTextarea) {
                 keyTextarea.value = "";
             }
@@ -1467,9 +1607,8 @@
         getState: () => state,
     };
 
-    // Initialize UI and start scanning automatically
-    (async function main() {
+    // Initialize UI and wait for the user to click Scan Licenses
+    (function main() {
         createUI();
-        await populate(() => renderLicenseList());
     })();
 })();
