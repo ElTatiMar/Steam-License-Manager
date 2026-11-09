@@ -51,7 +51,7 @@ A browser console script that injects an interactive management panel onto the S
 | **Select All Checkbox** | Located in the table header; selects or deselects all licenses matching the current search/filter. |
 | **Remove (Row Button)** | Immediately removes that specific license from your account. |
 | **Export .TXT / Export .CSV** | Downloads a `.txt` or `.csv` file of checked licenses (if any are selected) or all currently filtered licenses. |
-| **Remove Selected (N)** | Removes all currently checked licenses sequentially. |
+| **Remove Selected (N)** | Opens a confirmation dialog warning that license removal is permanent and irreversible, then removes all checked licenses sequentially upon confirmation. |
 | **Stop** | Safely aborts an active scan or bulk removal operation. |
 | **`_` / `✕` (Header)** | Minimize the panel to the bottom-right corner or close it completely. |
 

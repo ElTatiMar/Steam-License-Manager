@@ -666,6 +666,30 @@
     }
 
     /**
+     * Open the confirmation dialog before removing selected licenses
+     */
+    function openConfirmRemovePopup(count) {
+        const popup = document.getElementById("slm-confirm-remove-backdrop");
+        const countEl = document.getElementById("slm-confirm-remove-count");
+        if (!popup) return;
+
+        if (countEl) {
+            countEl.textContent = String(count);
+        }
+        popup.style.display = "flex";
+    }
+
+    /**
+     * Close the confirmation dialog for removing selected licenses
+     */
+    function closeConfirmRemovePopup() {
+        const popup = document.getElementById("slm-confirm-remove-backdrop");
+        if (popup) {
+            popup.style.display = "none";
+        }
+    }
+
+    /**
      * Inject CSS styles for the Steam License Manager UI
      */
     function injectStyles() {
@@ -1373,6 +1397,22 @@
                         </div>
                     </div>
                 </div>
+
+                <div id="slm-confirm-remove-backdrop" class="slm-popup-backdrop" role="alertdialog" aria-label="Confirm License Removal">
+                    <div class="slm-popup" style="border-color: #b83b3b;">
+                        <h3 class="slm-popup-title">Confirm License Removal</h3>
+                        <p class="slm-popup-desc">
+                            You are about to remove <strong id="slm-confirm-remove-count" style="color: #ffffff;">0</strong> selected license(s) from your Steam account.
+                        </p>
+                        <div class="slm-popup-warn" style="background: rgba(139, 38, 38, 0.35); border-color: #b83b3b; color: #ff8585;">
+                            <strong>⚠ Warning:</strong> Any removal of licenses from your Steam account is <strong>permanent and irreversible</strong>.
+                        </div>
+                        <div class="slm-popup-actions">
+                            <button id="slm-confirm-remove-cancel-btn" class="slm-btn">Cancel</button>
+                            <button id="slm-confirm-remove-submit-btn" class="slm-btn slm-btn-danger">Remove Permanently</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
 
@@ -1396,6 +1436,9 @@
         const scanBtn = document.getElementById("slm-scan-btn");
         const stopBtn = document.getElementById("slm-stop-btn");
         const removeSelectedBtn = document.getElementById("slm-remove-selected-btn");
+        const confirmRemoveBackdrop = document.getElementById("slm-confirm-remove-backdrop");
+        const confirmRemoveCancelBtn = document.getElementById("slm-confirm-remove-cancel-btn");
+        const confirmRemoveSubmitBtn = document.getElementById("slm-confirm-remove-submit-btn");
         const exportTxtBtn = document.getElementById("slm-export-txt-btn");
         const exportCsvBtn = document.getElementById("slm-export-csv-btn");
         const directRemoveBtn = document.getElementById("slm-direct-remove-btn");
@@ -1558,8 +1601,25 @@
             }
         });
 
-        removeSelectedBtn.addEventListener("click", async () => {
+        removeSelectedBtn.addEventListener("click", () => {
             const idsToRemove = Array.from(state.selectedIds);
+            if (idsToRemove.length === 0) return;
+            openConfirmRemovePopup(idsToRemove.length);
+        });
+
+        confirmRemoveCancelBtn.addEventListener("click", () => {
+            closeConfirmRemovePopup();
+        });
+
+        confirmRemoveBackdrop.addEventListener("click", (e) => {
+            if (e.target === confirmRemoveBackdrop) {
+                closeConfirmRemovePopup();
+            }
+        });
+
+        confirmRemoveSubmitBtn.addEventListener("click", async () => {
+            const idsToRemove = Array.from(state.selectedIds);
+            closeConfirmRemovePopup();
             if (idsToRemove.length === 0) return;
             await removePackages(idsToRemove);
         });
