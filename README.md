@@ -12,23 +12,27 @@ A browser console script that injects an interactive management panel onto the S
   - Search by **AppId / Package ID** (single ID like `12345` or multiple comma/space-separated IDs like `12345, 67890`).
   - Search by **License Name** or acquisition keyword (case-insensitive).
 - **Direct ID Removal**: Enter one or more numeric IDs into the search bar to immediately reveal a **Remove ID(s) Directly** action—allowing you to remove specific IDs even without waiting for a full scan.
-- **Quick Filter Tabs**:
-  - **All**: View all removable licenses found on your account.
-  - **Demos & Trailers**: Filter items matching demo, trailer, teaser, PEGI, or ESRB keywords.
-  - **Selected**: View only the licenses you have checked for bulk removal.
-- **Single & Bulk Removal**: Remove a single license with one click or select multiple licenses (with **Select All** support for the active filter) and remove them sequentially.
-- **Activate Steam Key(s)**: Open a popup to enter one or more Steam keys (one per line), validate each line against `AAAAA-BBBBB-CCCCC`, uppercase each key, and open `https://store.steampowered.com/account/registerkey?key={KEY}` in a new tab per key.
+- **Quick Filter Tabs & Sortable Columns**:
+  - **All / Demos & Trailers / Selected**: Filter tabs to narrow down the displayed license list.
+  - **Sortable Headers**: Click **AppId / PkgID**, **License Name**, or **Date** to sort ascending (`▲`), descending (`▼`), or reset to scan order (`⇅`).
+- **Single & Bulk Removal with Permanent Confirmation**: Remove a single license, direct ID(s), or multiple selected licenses sequentially, with a confirmation dialog previewing the target items and warning that license removal is permanent and irreversible.
+- **Activate Steam Key(s) (Direct AJAX & Tab Modes)**:
+  - Validate keys line-by-line against `AAAAA-BBBBB-CCCCC`.
+  - **Activate Directly (No Tabs)**: Redeems keys in the background via Steam's `/account/ajaxregisterkey/` endpoint, logging the redeemed product title or exact error code without opening new tabs.
+  - **Open in New Tabs**: Opens `https://store.steampowered.com/account/registerkey?key={KEY}` in a new tab per key.
 - **Export to `.TXT` & `.CSV`**: Export your selected or currently filtered licenses to a plain-text (`.txt`) or spreadsheet-ready (`.csv`) file with one click.
-- **Built-in Rate-Limit & Session Handling**:
+- **Built-in Rate-Limit Countdown & Session Handling**:
   - Verifies an active Steam login session (`g_sessionID`) before scanning or removing.
   - Spaces requests with a `1000ms` delay to be gentle on Steam's servers.
-  - Automatically detects Steam rate-limiting (`success === 84`), pauses for 10 minutes before retrying, and allows you to cancel at any time via the **Stop** button.
+  - Automatically detects Steam rate-limiting (`success === 84`), pauses for 10 minutes with a live `MM:SS` countdown in the status bar before retrying, and allows instant cancellation via the **Stop** button.
+- **Userscript & Console Compatible**: Includes a standard `// ==UserScript==` header for Tampermonkey/Violentmonkey installation (with a floating **Steam License Manager** launcher button) and works directly when pasted into the browser DevTools console.
 - **Live Activity Log & Console API**: Displays timestamped logs directly in the UI panel and exposes `window.SteamLicenseManager` for programmatic use in DevTools.
 
 ---
 
 ## How to Use
 
+### Option A: Browser Console
 1. Open your browser and log in to [https://store.steampowered.com](https://store.steampowered.com) (or navigate directly to [https://store.steampowered.com/account/licenses](https://store.steampowered.com/account/licenses)).
 2. Open your browser's **Developer Tools**:
    - **Windows / Linux**: Press `F12` or `Ctrl + Shift + I`
@@ -37,6 +41,10 @@ A browser console script that injects an interactive management panel onto the S
 4. Copy the entire contents of [`steam-license-manager.js`](./steam-license-manager.js), paste it into the console, and press **Enter**.
 5. The **Steam License Manager** modal will appear. Click **Scan Licenses** to scan your account licenses (or immediately use **Activate Key(s)** or direct ID removal).
 
+### Option B: Userscript (Tampermonkey / Violentmonkey)
+1. Install [`steam-license-manager.js`](./steam-license-manager.js) as a userscript in Tampermonkey or Violentmonkey.
+2. Visit [`https://store.steampowered.com/account/licenses/`](https://store.steampowered.com/account/licenses/) (where the panel opens automatically) or any `store.steampowered.com` page and click the floating **Steam License Manager** button in the bottom-right corner.
+
 ---
 
 ## Using the Interface
@@ -44,16 +52,17 @@ A browser console script that injects an interactive management panel onto the S
 | Control | Description |
 | :--- | :--- |
 | **Search Input** | Filter scanned licenses by numeric ID (`12345`), multiple IDs (`12345, 67890`), or license title. |
-| **Remove ID(s) Directly** | Appears automatically when numeric IDs are typed in the search box; removes those IDs immediately. |
+| **Remove ID(s) Directly** | Appears automatically when numeric IDs are typed in the search box; opens the permanent removal confirmation dialog for those IDs. |
 | **All / Demos & Trailers / Selected** | Quick filter tabs to narrow down the displayed license list. |
-| **Activate Key(s)** | Opens a popup to input one Steam key per line (`AAAAA-BBBBB-CCCCC`), validates each line, and opens a registration tab per key. |
+| **Column Headers (`AppId / PkgID`, `License Name`, `Date`)** | Click any header to sort ascending (`▲`), descending (`▼`), or reset to original scan order (`⇅`). |
+| **Activate Key(s)** | Opens a popup to input one Steam key per line (`AAAAA-BBBBB-CCCCC`), validates each line, and lets you either **Activate Directly (No Tabs)** via AJAX or **Open in New Tabs**. |
 | **Scan Licenses / Rescan Licenses** | Fetches (or re-fetches) your account's license pages from Steam when clicked. |
 | **Select All Checkbox** | Located in the table header; selects or deselects all licenses matching the current search/filter. |
-| **Remove (Row Button)** | Immediately removes that specific license from your account. |
+| **Remove (Row Button)** | Opens the permanent removal confirmation dialog and removes that specific license from your account. |
 | **Export .TXT / Export .CSV** | Downloads a `.txt` or `.csv` file of checked licenses (if any are selected) or all currently filtered licenses. |
 | **Remove Selected (N)** | Opens a confirmation dialog warning that license removal is permanent and irreversible, then removes all checked licenses sequentially upon confirmation. |
-| **Stop** | Safely aborts an active scan or bulk removal operation. |
-| **`_` / `✕` (Header)** | Minimize the panel to the bottom-right corner or close it completely. |
+| **Stop** | Safely aborts an active scan, countdown, AJAX key batch, or bulk removal operation. |
+| **`_` / `✕` (Header)** | Minimize the panel to the bottom-right corner or close it (leaving a floating **Steam License Manager** launcher button). |
 
 ---
 
@@ -72,12 +81,16 @@ await SteamLicenseManager.populate();
 SteamLicenseManager.search("12345");
 SteamLicenseManager.search("demo");
 
+// Toggle sort column ("id" | "name" | "date")
+SteamLicenseManager.toggleSort("name");
+
 // Export licenses as .txt or .csv (scope: "auto" | "selected" | "filtered" | "all")
 SteamLicenseManager.exportTxt();
 SteamLicenseManager.exportCsv("all");
 
-// Open the Activate Key(s) popup or activate keys directly via console
+// Open the Activate Key(s) popup or activate keys via AJAX or tabs
 SteamLicenseManager.openActivateKeysPopup();
+await SteamLicenseManager.activateKeysAjax("AAAAA-BBBBB-CCCCC\n12345-ABCDE-67890");
 SteamLicenseManager.activateKeys("AAAAA-BBBBB-CCCCC\n12345-ABCDE-67890");
 
 // Remove specific Package / AppIds directly via console
