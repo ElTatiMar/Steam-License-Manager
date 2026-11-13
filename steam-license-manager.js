@@ -25,7 +25,18 @@
         isScanning: false,
         isRemoving: false,
         abortRequested: false,
+        cancelWait: null,
     };
+
+    /**
+     * Signal abort and immediately cancel any active wait timer
+     */
+    function requestAbort() {
+        state.abortRequested = true;
+        if (typeof state.cancelWait === "function") {
+            state.cancelWait();
+        }
+    }
 
     /**
      * Check if user is logged into Steam in the current window context
@@ -359,15 +370,24 @@
     }
 
     /**
-     * Wait helper that checks abortRequested every 250ms
+     * Wait for the exact duration (ms) using a single timer while allowing immediate cancellation
      */
-    async function waitWithCancel(ms) {
-        const step = 250;
-        let elapsed = 0;
-        while (elapsed < ms && !state.abortRequested) {
-            await new Promise((r) => setTimeout(r, Math.min(step, ms - elapsed)));
-            elapsed += step;
+    function waitWithCancel(ms) {
+        if (state.abortRequested || ms <= 0) {
+            return Promise.resolve();
         }
+        return new Promise((resolve) => {
+            const timerId = setTimeout(() => {
+                state.cancelWait = null;
+                resolve();
+            }, ms);
+
+            state.cancelWait = () => {
+                clearTimeout(timerId);
+                state.cancelWait = null;
+                resolve();
+            };
+        });
     }
 
     /**
@@ -1557,7 +1577,7 @@
         });
 
         stopBtn.addEventListener("click", () => {
-            state.abortRequested = true;
+            requestAbort();
             logMessage("Stopping current operation...", "warn");
         });
 
@@ -1640,7 +1660,7 @@
         });
 
         closeBtn.addEventListener("click", () => {
-            state.abortRequested = true;
+            requestAbort();
             overlay.remove();
         });
     }
