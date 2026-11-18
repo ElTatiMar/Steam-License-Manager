@@ -2,8 +2,7 @@
 
 A browser console script that injects an interactive management panel onto the Steam Store, allowing you to scan your account's removable licenses, search by specific **AppId / Package ID** or **License Name**, and remove individual or multiple licenses in bulk.
 
-<img width="1920" height="1040" alt="librewolf_t6Ul5RrOuS" src="https://github.com/user-attachments/assets/feffbd80-5e2c-4504-b1ce-321b9266e3a8" />
-
+![Steam License Manager](https://github.com/user-attachments/assets/feffbd80-5e2c-4504-b1ce-321b9266e3a8)
 
 ---
 
@@ -36,6 +35,7 @@ A browser console script that injects an interactive management panel onto the S
 ## How to Use
 
 ### Option A: Browser Console
+
 1. Open your browser and log in to [https://store.steampowered.com](https://store.steampowered.com) (or navigate directly to [https://store.steampowered.com/account/licenses](https://store.steampowered.com/account/licenses)).
 2. Open your browser's **Developer Tools**:
    - **Windows / Linux**: Press `F12` or `Ctrl + Shift + I`
@@ -45,6 +45,7 @@ A browser console script that injects an interactive management panel onto the S
 5. The **Steam License Manager** modal will appear. Click **Scan Licenses** to scan your account licenses (or immediately use **Activate Key(s)** or direct ID removal).
 
 ### Option B: Userscript (Tampermonkey / Violentmonkey)
+
 1. Install [`steam-license-manager.js`](./steam-license-manager.js) as a userscript in Tampermonkey or Violentmonkey.
 2. Visit [`https://store.steampowered.com/account/licenses/`](https://store.steampowered.com/account/licenses/) (where the panel opens automatically) or any `store.steampowered.com` page and click the floating **Steam License Manager** button in the bottom-right corner.
 
