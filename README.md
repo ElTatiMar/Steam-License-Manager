@@ -2,6 +2,9 @@
 
 A browser console script that injects an interactive management panel onto the Steam Store, allowing you to scan your account's removable licenses, search by specific **AppId / Package ID** or **License Name**, and remove individual or multiple licenses in bulk.
 
+<img width="1920" height="1040" alt="librewolf_t6Ul5RrOuS" src="https://github.com/user-attachments/assets/feffbd80-5e2c-4504-b1ce-321b9266e3a8" />
+
+
 ---
 
 ## Features
