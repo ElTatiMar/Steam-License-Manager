@@ -22,7 +22,7 @@ A browser console script that injects an interactive management panel onto the S
   - Validate keys line-by-line against `AAAAA-BBBBB-CCCCC`.
   - **Activate Directly (No Tabs)**: Redeems keys in the background via Steam's `/account/ajaxregisterkey/` endpoint, logging the redeemed product title or exact error code without opening new tabs.
   - **Open in New Tabs**: Opens `https://store.steampowered.com/account/registerkey?key={KEY}` in a new tab per key.
-- **Export to `.TXT` & `.CSV`**: Export your selected or currently filtered licenses to a plain-text (`.txt`) or spreadsheet-ready (`.csv`) file with one click.
+- **Export to `.TXT` & `.CSV` with Scope Selector**: Choose whether to export **Selected Only**, **Filtered**, **All Account**, or **Auto** (selected when checked, otherwise filtered) to a plain-text (`.txt`) or spreadsheet-ready (`.csv`) file.
 - **Built-in Rate-Limit Countdown & Session Handling**:
   - Verifies an active Steam login session (`g_sessionID`) before scanning or removing.
   - Spaces requests with a `1000ms` delay to be gentle on Steam's servers.
@@ -63,7 +63,7 @@ A browser console script that injects an interactive management panel onto the S
 | **Scan Licenses / Rescan Licenses** | Fetches (or re-fetches) your account's license pages from Steam when clicked. |
 | **Select All Checkbox** | Located in the table header; selects or deselects all licenses matching the current search/filter. |
 | **Remove (Row Button)** | Opens the permanent removal confirmation dialog and removes that specific license from your account. |
-| **Export .TXT / Export .CSV** | Downloads a `.txt` or `.csv` file of checked licenses (if any are selected) or all currently filtered licenses. |
+| **Export Scope / Export .TXT / Export .CSV** | Choose whether to export **Auto**, **Selected Only**, **Filtered**, or **All Account** licenses, then download the matching list as a `.txt` or `.csv` file. |
 | **Remove Selected (N)** | Opens a confirmation dialog warning that license removal is permanent and irreversible, then removes all checked licenses sequentially upon confirmation. |
 | **Stop** | Safely aborts an active scan, countdown, AJAX key batch, or bulk removal operation. |
 | **`_` / `✕` (Header)** | Minimize the panel to the bottom-right corner or close it (leaving a floating **Steam License Manager** launcher button). |
@@ -91,6 +91,8 @@ SteamLicenseManager.toggleSort("name");
 // Export licenses as .txt or .csv (scope: "auto" | "selected" | "filtered" | "all")
 SteamLicenseManager.exportTxt();
 SteamLicenseManager.exportCsv("all");
+SteamLicenseManager.exportSelectedTxt();
+SteamLicenseManager.exportSelectedCsv();
 
 // Open the Activate Key(s) popup or activate keys via AJAX or tabs
 SteamLicenseManager.openActivateKeysPopup();

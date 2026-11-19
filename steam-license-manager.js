@@ -39,6 +39,7 @@
         filterMode: "all", // "all" | "demo" | "selected"
         sortField: "index", // "index" | "id" | "name" | "date"
         sortDir: "asc", // "asc" | "desc"
+        exportScope: "auto", // "auto" | "selected" | "filtered" | "all"
         isScanning: false,
         isRemoving: false,
         isActivatingKeys: false,
@@ -239,6 +240,7 @@
 
         state.isScanning = false;
         state.licenses = licenses;
+        state.selectedIds = new Set([...state.selectedIds].filter((id) => seenIds.has(id)));
         updateControlsState();
         renderLicenseList();
 
@@ -465,6 +467,35 @@
     }
 
     /**
+     * Sort a license list according to the active table sort settings
+     */
+    function sortLicenses(list) {
+        if (state.sortField === "index") {
+            return [...list];
+        }
+
+        const dir = state.sortDir === "desc" ? -1 : 1;
+        return [...list].sort((a, b) => {
+            if (state.sortField === "id") {
+                return (Number(a.id) - Number(b.id)) * dir;
+            }
+            if (state.sortField === "name") {
+                return (
+                    a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }) * dir
+                );
+            }
+            if (state.sortField === "date") {
+                if (a.dateMs && b.dateMs && a.dateMs !== b.dateMs) {
+                    return (a.dateMs - b.dateMs) * dir;
+                }
+                // Fallback to chronological scan order (lower index = newer on Steam)
+                return (b.index - a.index) * dir;
+            }
+            return (a.index - b.index) * dir;
+        });
+    }
+
+    /**
      * Filter and sort licenses based on the search query, active filter mode, and sort column
      */
     function getFilteredLicenses() {
@@ -497,48 +528,32 @@
             );
         });
 
-        if (state.sortField === "index") {
-            return filtered;
-        }
+        return sortLicenses(filtered);
+    }
 
-        const dir = state.sortDir === "desc" ? -1 : 1;
-        return [...filtered].sort((a, b) => {
-            if (state.sortField === "id") {
-                return (Number(a.id) - Number(b.id)) * dir;
-            }
-            if (state.sortField === "name") {
-                return (
-                    a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }) * dir
-                );
-            }
-            if (state.sortField === "date") {
-                if (a.dateMs && b.dateMs && a.dateMs !== b.dateMs) {
-                    return (a.dateMs - b.dateMs) * dir;
-                }
-                // Fallback to chronological scan order (lower index = newer on Steam)
-                return (b.index - a.index) * dir;
-            }
-            return (a.index - b.index) * dir;
-        });
+    /**
+     * Resolve effective export scope ("selected" | "filtered" | "all")
+     */
+    function resolveExportScope(scope = state.exportScope) {
+        if (scope === "selected" || scope === "filtered" || scope === "all") {
+            return scope;
+        }
+        // "auto": export selected licenses if any are checked, otherwise export currently filtered list
+        const hasSelected = state.licenses.some((item) => !item.removed && state.selectedIds.has(item.id));
+        return hasSelected ? "selected" : "filtered";
     }
 
     /**
      * Resolve which licenses to export based on scope ("auto" | "selected" | "filtered" | "all")
      */
-    function getLicensesToExport(scope = "auto") {
+    function getLicensesToExport(scope = state.exportScope) {
+        const effectiveScope = resolveExportScope(scope);
         const activeLicenses = state.licenses.filter((item) => !item.removed);
-        if (scope === "all") {
-            return activeLicenses;
+        if (effectiveScope === "all") {
+            return sortLicenses(activeLicenses);
         }
-        if (scope === "selected") {
-            return activeLicenses.filter((item) => state.selectedIds.has(item.id));
-        }
-        if (scope === "filtered") {
-            return getFilteredLicenses();
-        }
-        // "auto": export selected licenses if any are checked, otherwise export currently filtered list
-        if (state.selectedIds.size > 0) {
-            return activeLicenses.filter((item) => state.selectedIds.has(item.id));
+        if (effectiveScope === "selected") {
+            return sortLicenses(activeLicenses.filter((item) => state.selectedIds.has(item.id)));
         }
         return getFilteredLicenses();
     }
@@ -557,12 +572,20 @@
     /**
      * Export licenses as a downloadable .txt or .csv file
      */
-    function exportLicenses(format = "txt", scope = "auto") {
+    function exportLicenses(format = "txt", scope = state.exportScope) {
         const fmt = String(format).toLowerCase() === "csv" ? "csv" : "txt";
-        const items = getLicensesToExport(scope);
+        const effectiveScope = resolveExportScope(scope);
+        const items = getLicensesToExport(effectiveScope);
 
         if (!items || items.length === 0) {
-            logMessage("No licenses available to export.", "warn");
+            if (effectiveScope === "selected") {
+                logMessage(
+                    "No selected licenses to export. Check one or more licenses first or switch the export scope.",
+                    "warn"
+                );
+            } else {
+                logMessage("No licenses available to export.", "warn");
+            }
             return false;
         }
 
@@ -591,8 +614,15 @@
             content = lines.join("\r\n");
         }
 
+        const hasActiveFilter = Boolean(state.searchQuery.trim()) || state.filterMode !== "all";
         const dateStamp = new Date().toISOString().slice(0, 10);
-        const filename = `steam-licenses-${dateStamp}.${fmt}`;
+        const scopeSuffix =
+            effectiveScope === "selected"
+                ? "-selected"
+                : effectiveScope === "filtered" && hasActiveFilter
+                ? "-filtered"
+                : "";
+        const filename = `steam-licenses${scopeSuffix}-${dateStamp}.${fmt}`;
 
         const blob = new Blob([content], { type: mimeType });
         const url = URL.createObjectURL(blob);
@@ -605,11 +635,9 @@
         setTimeout(() => URL.revokeObjectURL(url), 1000);
 
         const scopeDesc =
-            scope === "auto"
-                ? state.selectedIds.size > 0
-                    ? "selected"
-                    : "filtered"
-                : scope;
+            effectiveScope === "all" || (effectiveScope === "filtered" && !hasActiveFilter)
+                ? "account"
+                : effectiveScope;
         logMessage(`Exported ${items.length} ${scopeDesc} license(s) to ${filename}.`, "success");
         return true;
     }
@@ -1306,6 +1334,7 @@
                 align-items: center;
                 justify-content: space-between;
                 gap: 12px;
+                flex-wrap: wrap;
             }
             .slm-status {
                 font-size: 12px;
@@ -1313,11 +1342,49 @@
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
+                flex: 1;
+                min-width: 150px;
             }
             .slm-footer-actions {
                 display: flex;
                 gap: 8px;
                 align-items: center;
+                flex-wrap: wrap;
+            }
+            .slm-export-group {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                background: #101822;
+                padding: 3px;
+                border-radius: 4px;
+                border: 1px solid #2a475e;
+            }
+            .slm-export-group .slm-btn {
+                padding: 5px 10px;
+            }
+            .slm-select {
+                background: #1b2838;
+                border: 1px solid #3b617f;
+                color: #c7d5e0;
+                padding: 4px 8px;
+                border-radius: 3px;
+                font-size: 12px;
+                font-family: inherit;
+                outline: none;
+                cursor: pointer;
+                color-scheme: dark;
+            }
+            .slm-select:focus {
+                border-color: #66c0f4;
+            }
+            .slm-select:disabled {
+                opacity: 0.45;
+                cursor: not-allowed;
+            }
+            .slm-select option {
+                background: #171a21;
+                color: #c7d5e0;
             }
             .slm-btn-success {
                 background: linear-gradient(90deg, #6fa720 0%, #588a1b 100%);
@@ -1442,6 +1509,76 @@
     }
 
     /**
+     * Update export scope selector counts and export button states/tooltips
+     */
+    function updateExportControls() {
+        const exportScopeSelect = document.getElementById("slm-export-scope");
+        const exportTxtBtn = document.getElementById("slm-export-txt-btn");
+        const exportCsvBtn = document.getElementById("slm-export-csv-btn");
+
+        const activeCount = state.licenses.filter((item) => !item.removed).length;
+        const selectedCount = getLicensesToExport("selected").length;
+        const filteredCount = getLicensesToExport("filtered").length;
+        const isUnfiltered = !state.searchQuery.trim() && state.filterMode === "all";
+        const resolvedScope = resolveExportScope(state.exportScope);
+        const exportableCount = getLicensesToExport(state.exportScope).length;
+
+        if (exportScopeSelect) {
+            exportScopeSelect.value = state.exportScope;
+            exportScopeSelect.disabled = state.isScanning;
+
+            const autoOpt = exportScopeSelect.querySelector('option[value="auto"]');
+            const selectedOpt = exportScopeSelect.querySelector('option[value="selected"]');
+            const filteredOpt = exportScopeSelect.querySelector('option[value="filtered"]');
+            const allOpt = exportScopeSelect.querySelector('option[value="all"]');
+
+            if (autoOpt) {
+                autoOpt.textContent =
+                    selectedCount > 0
+                        ? `Auto: Selected (${selectedCount})`
+                        : isUnfiltered
+                        ? `Auto: All (${activeCount})`
+                        : `Auto: Filtered (${filteredCount})`;
+            }
+            if (selectedOpt) {
+                selectedOpt.textContent = `Selected Only (${selectedCount})`;
+            }
+            if (filteredOpt) {
+                filteredOpt.textContent = `Filtered (${filteredCount})`;
+            }
+            if (allOpt) {
+                allOpt.textContent = `All Account (${activeCount})`;
+            }
+        }
+
+        let exportHint;
+        if (resolvedScope === "selected") {
+            exportHint =
+                selectedCount > 0
+                    ? `Export ${selectedCount} selected license(s)`
+                    : "Select at least one license to export (or switch export scope)";
+        } else if (resolvedScope === "all") {
+            exportHint = `Export all ${activeCount} scanned account license(s)`;
+        } else {
+            exportHint = `Export ${filteredCount} filtered license(s)`;
+        }
+
+        const disableExport = exportableCount === 0 || state.isScanning;
+
+        if (exportTxtBtn) {
+            exportTxtBtn.disabled = disableExport;
+            exportTxtBtn.title =
+                selectedCount === 0 && resolvedScope === "selected" ? exportHint : `${exportHint} as .txt`;
+        }
+
+        if (exportCsvBtn) {
+            exportCsvBtn.disabled = disableExport;
+            exportCsvBtn.title =
+                selectedCount === 0 && resolvedScope === "selected" ? exportHint : `${exportHint} as .csv`;
+        }
+    }
+
+    /**
      * Render the filtered & sorted license rows in the table
      */
     function renderLicenseList() {
@@ -1449,8 +1586,6 @@
         const countBadge = document.getElementById("slm-count-badge");
         const selectAllCheckbox = document.getElementById("slm-select-all");
         const removeSelectedBtn = document.getElementById("slm-remove-selected-btn");
-        const exportTxtBtn = document.getElementById("slm-export-txt-btn");
-        const exportCsvBtn = document.getElementById("slm-export-csv-btn");
         const directBar = document.getElementById("slm-direct-remove-bar");
         const directIdLabel = document.getElementById("slm-direct-id-label");
 
@@ -1477,11 +1612,6 @@
         const activeLicenses = state.licenses.filter((l) => !l.removed);
         const filtered = getFilteredLicenses();
         const busy = state.isScanning || state.isRemoving || state.isActivatingKeys;
-        const exportableCount = state.selectedIds.size > 0 ? state.selectedIds.size : filtered.length;
-        const exportHint =
-            state.selectedIds.size > 0
-                ? `Export ${state.selectedIds.size} selected license(s)`
-                : `Export ${filtered.length} filtered license(s)`;
 
         if (countBadge) {
             countBadge.textContent = `${filtered.length} / ${activeLicenses.length} Licenses (${state.selectedIds.size} selected)`;
@@ -1492,15 +1622,7 @@
             removeSelectedBtn.disabled = state.selectedIds.size === 0 || busy;
         }
 
-        if (exportTxtBtn) {
-            exportTxtBtn.disabled = exportableCount === 0 || state.isScanning;
-            exportTxtBtn.title = `${exportHint} as .txt`;
-        }
-
-        if (exportCsvBtn) {
-            exportCsvBtn.disabled = exportableCount === 0 || state.isScanning;
-            exportCsvBtn.title = `${exportHint} as .csv`;
-        }
+        updateExportControls();
 
         // Show direct AppId removal helper if user typed one or more numeric IDs
         const rawQuery = state.searchQuery.trim();
@@ -1579,13 +1701,10 @@
         const stopBtn = document.getElementById("slm-stop-btn");
         const removeSelectedBtn = document.getElementById("slm-remove-selected-btn");
         const directRemoveBtn = document.getElementById("slm-direct-remove-btn");
-        const exportTxtBtn = document.getElementById("slm-export-txt-btn");
-        const exportCsvBtn = document.getElementById("slm-export-csv-btn");
         const keyAjaxBtn = document.getElementById("slm-key-ajax-btn");
         const keySubmitBtn = document.getElementById("slm-key-submit-btn");
 
         const busy = state.isScanning || state.isRemoving || state.isActivatingKeys;
-        const exportableCount = getLicensesToExport("auto").length;
 
         if (scanBtn) {
             scanBtn.disabled = busy;
@@ -1604,12 +1723,7 @@
         if (directRemoveBtn) {
             directRemoveBtn.disabled = busy;
         }
-        if (exportTxtBtn) {
-            exportTxtBtn.disabled = state.isScanning || exportableCount === 0;
-        }
-        if (exportCsvBtn) {
-            exportCsvBtn.disabled = state.isScanning || exportableCount === 0;
-        }
+        updateExportControls();
         if (keyAjaxBtn) {
             keyAjaxBtn.disabled = busy;
             keyAjaxBtn.textContent = state.isActivatingKeys
@@ -1736,12 +1850,20 @@
                 <div class="slm-footer">
                     <div id="slm-status-text" class="slm-status">Ready.</div>
                     <div class="slm-footer-actions">
-                        <button id="slm-export-txt-btn" class="slm-btn" disabled title="Export licenses as .txt">
-                            Export .TXT
-                        </button>
-                        <button id="slm-export-csv-btn" class="slm-btn" disabled title="Export licenses as .csv">
-                            Export .CSV
-                        </button>
+                        <div class="slm-export-group">
+                            <select id="slm-export-scope" class="slm-select" aria-label="Export scope" title="Choose which licenses to export">
+                                <option value="auto">Auto: All (0)</option>
+                                <option value="selected">Selected Only (0)</option>
+                                <option value="filtered">Filtered (0)</option>
+                                <option value="all">All Account (0)</option>
+                            </select>
+                            <button id="slm-export-txt-btn" class="slm-btn" disabled title="Export licenses as .txt">
+                                Export .TXT
+                            </button>
+                            <button id="slm-export-csv-btn" class="slm-btn" disabled title="Export licenses as .csv">
+                                Export .CSV
+                            </button>
+                        </div>
                         <button id="slm-stop-btn" class="slm-btn" style="display: none;">Stop</button>
                         <button id="slm-remove-selected-btn" class="slm-btn slm-btn-danger" disabled>
                             Remove Selected (0)
@@ -1826,6 +1948,7 @@
         const confirmRemoveBackdrop = document.getElementById("slm-confirm-remove-backdrop");
         const confirmRemoveCancelBtn = document.getElementById("slm-confirm-remove-cancel-btn");
         const confirmRemoveSubmitBtn = document.getElementById("slm-confirm-remove-submit-btn");
+        const exportScopeSelect = document.getElementById("slm-export-scope");
         const exportTxtBtn = document.getElementById("slm-export-txt-btn");
         const exportCsvBtn = document.getElementById("slm-export-csv-btn");
         const directRemoveBtn = document.getElementById("slm-direct-remove-btn");
@@ -1989,12 +2112,22 @@
             logMessage("Stopping current operation...", "warn");
         });
 
+        if (exportScopeSelect) {
+            exportScopeSelect.addEventListener("change", (e) => {
+                const selectedScope = e.target.value;
+                state.exportScope = ["auto", "selected", "filtered", "all"].includes(selectedScope)
+                    ? selectedScope
+                    : "auto";
+                updateExportControls();
+            });
+        }
+
         exportTxtBtn.addEventListener("click", () => {
-            exportLicenses("txt", "auto");
+            exportLicenses("txt", state.exportScope);
         });
 
         exportCsvBtn.addEventListener("click", () => {
-            exportLicenses("csv", "auto");
+            exportLicenses("csv", state.exportScope);
         });
 
         selectAllCheckbox.addEventListener("change", (e) => {
@@ -2085,8 +2218,10 @@
         openConfirmRemovePopup,
         toggleSort,
         exportLicenses,
-        exportTxt: (scope = "auto") => exportLicenses("txt", scope),
-        exportCsv: (scope = "auto") => exportLicenses("csv", scope),
+        exportTxt: (scope = state.exportScope) => exportLicenses("txt", scope),
+        exportCsv: (scope = state.exportScope) => exportLicenses("csv", scope),
+        exportSelectedTxt: () => exportLicenses("txt", "selected"),
+        exportSelectedCsv: () => exportLicenses("csv", "selected"),
         search(query) {
             state.searchQuery = String(query || "");
             const searchInput = document.getElementById("slm-search-input");
